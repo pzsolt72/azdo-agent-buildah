@@ -1,0 +1,14 @@
+trigger:
+- none
+
+pool:
+  name: dind-pool
+
+name: $(Date:yyyyMMdd)-$(Rev:rr)
+
+steps:
+- script: |
+    
+    buildah build -f containerfiles/Dockerfile-test-the-build -t  $(registry)/mypyhttpserver:$(Build.BuildNumber)
+    buildah login -u $(registryUser) -p $(registryPwd) $(registry)
+    buildah push $(registry)/mypyhttpserver:$(Build.BuildNumber)

@@ -1,0 +1,60 @@
+trigger: 
+- none
+
+name: Buildah test infrastructure $(Date:yyyyMMdd)-$(Rev:rr)
+
+variables:
+  subscription: 'dind'
+  acrName:  buildahtestacr
+  aksName:  buildah-test-aks
+  resourceGroup:  buildah-test-rg
+
+steps:
+    
+- task: AzureCLI@2
+  displayName: Create ResourceGroup
+  inputs:
+    azureSubscription: '$(subscription)'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      if [ $(az group exists --name $(resourceGroup)) = false ]; then
+        az group create -l westus -n $(resourceGroup)
+      else
+        echo "Resource group $(resourceGroup) exists"
+      fi
+      
+- task: AzureCLI@2
+  displayName: Deploy Aks
+  inputs:
+    azureSubscription: '$(subscription)'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      az aks create -g $(resourceGroup)  \
+      -n $(aksName) \
+      --enable-managed-identity  \
+      --node-count 1  \
+      --vm-set-type VirtualMachineScaleSets \
+      --generate-ssh-keys \
+      --load-balancer-sku standard \
+      --enable-cluster-autoscaler \
+      --min-count 1 \
+      --max-count 2
+
+- task: AzureCLI@2
+  displayName: Deploy Acr
+  inputs:
+    azureSubscription: '$(subscription)'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      az acr create \
+        --resource-group $(resourceGroup) \
+        --name $(acrName) \
+        --sku Basic
+
+      sleep 20
+
+      az aks update -n $(aksName) -g $(resourceGroup) --attach-acr $(acrName)
+

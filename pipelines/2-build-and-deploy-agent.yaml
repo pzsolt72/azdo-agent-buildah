@@ -1,0 +1,69 @@
+trigger: 
+- none
+
+name: $(Date:yyyyMMdd)-$(Rev:rr)
+
+variables:
+  acrServiceConnectionName: 'agentAcrConn'
+  aksServiceConnectionName: 'agentAksConn'
+  repositoryName: buildahagent
+  tag: $(Build.BuildNumber) 
+  acr: buildahtestacr.azurecr.io
+  AZP_URL: 'https://dev.azure.com/dt-pzsolt'
+  # AZP_TOKEN: 'in the pipeline vars on the UI'
+  AZP_POOL: 'dind-pool'
+  AZP_AGENT_NAME: 'AksBuildahAgentUbuntu'
+
+steps:
+    
+- task: Docker@2
+  displayName: BuildAgent
+  inputs:
+    containerRegistry: '$(acrServiceConnectionName)'
+    repository: '$(repositoryName)'
+    command: 'buildAndPush'
+    buildContext: 'containerfiles'
+    Dockerfile: 'containerfiles/Dockerfile-agent'
+    tags: |
+      $(tag)
+      latest
+- task: AzureCLI@2
+  displayName: DeployAgentAsContaierApp
+  enabled: false
+  inputs:
+    azureSubscription: 'dind'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      az containerapp update \
+      --name dind-ca \
+      --resource-group dind-rg \
+      --revision-suffix "$(repositoryName)-$(tag)" \
+      --image dindacr.azurecr.io/$(repositoryName):$(tag) 
+
+- task: replacetokens@6
+  inputs:
+    sources: 'k8s-manifests/self-hosted-deployment.yaml'
+    tokenPattern: 'doubleunderscores'
+    missingVarLog: 'error'
+    ifNoFilesFound: 'error'
+    
+- task: KubernetesManifest@1
+  displayName: Deploy Fuse Plugin
+  inputs:
+    action: 'deploy'
+    connectionType: 'kubernetesServiceConnection'
+    kubernetesServiceConnection: '$(aksServiceConnectionName)'
+    namespace: 'kube-system'
+    manifests: 'k8s-manifests/fuse-device-plugin-k8s-1.16.yaml'
+    rolloutStatusTimeout: '30'
+
+- task: KubernetesManifest@1
+  displayName: Deploy Agent
+  inputs:
+    action: 'deploy'
+    connectionType: 'kubernetesServiceConnection'
+    kubernetesServiceConnection: '$(aksServiceConnectionName)'
+    namespace: 'default'
+    manifests: 'k8s-manifests/self-hosted-deployment.yaml'
+    rolloutStatusTimeout: '30'

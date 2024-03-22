@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: azdo-selfhosted-agent
+  labels:
+    app: azdo-selfhosted-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: azdo-selfhosted-agent
+  template:
+    metadata:
+      annotations:
+        container.apparmor.security.beta.kubernetes.io/azdo-selfhosted-agent: unconfined
+      labels:
+        app: azdo-selfhosted-agent
+    spec:
+      containers:
+      - name: azdo-selfhosted-agent
+        image: __acr__/__repositoryName__:__tag__
+        resources:
+          limits:
+            memory: 2000Mi
+            cpu: 1000m
+            github.com/fuse: 1
+          requests:
+            memory: 500Mi
+            cpu: 250m        
+        env:
+        - name: AZP_URL
+          value: "__AZP_URL__"
+        - name: AZP_TOKEN
+          value: "__AZP_TOKEN__"
+        - name: AZP_POOL
+          value: "__AZP_POOL__"        
+        - name: AZP_AGENT_NAME
+          value: "__AZP_AGENT_NAME__"
+        securityContext:
+          seccompProfile:
+            type: Unconfined
+          capabilities:
+            add: 
+            - "SYS_ADMIN"
+            - "MKNOD"
+            - "SYS_CHROOT"
+            - "SETFCAP"
+            - "SYS_RESOURCE"
+          runAsUser: 0
+          runAsGroup: 0
+          privileged: false          
